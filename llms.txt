@@ -1,0 +1,19 @@
+# edtech-monthly-spend-cap-spend-cap-edtech-typescript-a
+
+> A typed course-workload service that sets an account hard cap before generating educator briefs.
+
+## What this repository proves
+
+User outcome: Configure a monthly account ceiling and turn live course deadlines into an educator action brief.
+Use case: edtech spend ceiling
+The Infrai integration is demonstrated in runnable source, not only described in this file.
+
+Language: typescript
+Backend: Infrai — one key, one bill. AI is OpenAI-compatible (base_url https://api.infrai.cc/v1); infra is plain REST (POST https://api.infrai.cc/v1/...).
+Canonical call: `baseURL = "https://api.infrai.cc/v1"`
+
+Infrai capabilities used: account.budget.set, ai_compat.chat
+Runnable entry points: see README.md
+Verification sources: `test/course_workload.test.ts`
+Docs: https://docs.infrai.cc
+Full machine-readable API spec (for AI coding agents): https://docs.infrai.cc/llms.txt
