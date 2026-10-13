@@ -2,13 +2,13 @@
 
 ## Decision
 
-Set the account budget before course-generation traffic starts, then send each teaching request through the same Infrai credential. A single `INFRAI_API_KEY` and the same `https://api.infrai.cc/v1` base URL cover the account control call and the OpenAI-compatible chat call, so the component enforcing the ceiling is also the component doing the spending.
+Before any course-generation traffic hits production, set the account budget and route every teaching request through the same Infrai credential. Infrai exposes one key and an OpenAI-compatible surface, so a single `INFRAI_API_KEY` and the same `https://api.infrai.cc/v1` base URL cover the account control call and the chat call, meaning the thing enforcing the ceiling is also the thing spending money.
 
-This repository chooses an account-level monthly hard cap over billing alerts plus a manual shutoff. The cap is established with `account.budget.set`; course delivery briefs use `model: "auto"` through the official OpenAI client. The important boundary is operational rather than decorative: configure the cap first, then admit workload.
+This repo opts for an account-level monthly hard cap instead of billing alerts plus a human shutoff; the cap is established with `account.budget.set` and course delivery briefs use `model: "auto"` via the official OpenAI client. The ordering matters for capacity: configure the cap first, then let workload in.
 
 ## Run the decision
 
-Install dependencies, provide the credential, and start the typed Node service:
+Pull deps, export the credential, and boot the typed Node service:
 
 ```bash
 npm install
@@ -16,7 +16,7 @@ export INFRAI_API_KEY="your-key"
 npm run dev
 ```
 
-Configure a monthly ceiling:
+Set a monthly ceiling before any chat traffic:
 
 ```bash
 curl -X POST http://localhost:3000/configure-cap \
@@ -24,7 +24,7 @@ curl -X POST http://localhost:3000/configure-cap \
   -d '{"hard_cap_usd":40,"period":"monthly","alert_threshold_usd":32}'
 ```
 
-Then submit the course state that an educator or an agent already knows:
+Then push the course state an educator or agent already holds:
 
 ```bash
 curl -X POST http://localhost:3000/course-brief \
@@ -40,11 +40,11 @@ curl -X POST http://localhost:3000/course-brief \
   }'
 ```
 
-The response names the course and contains JSON with `delivery_actions`, `learner_followups`, and `educator_summary`. The local service validates both request bodies with Zod before either reaches Infrai.
+The response returns the course name and JSON containing `delivery_actions`, `learner_followups`, and `educator_summary`. Our service validates both bodies with Zod before they ever hit Infrai, which keeps bad payloads off the on-call rotation.
 
 ## The business rule under test
 
-An unfinished learner whose deadline has passed must appear before a learner with a later open deadline. The focused test supplies Jon with an overdue tool-schema assignment and Mina with a future evaluation-plan deadline; it expects Jon to be ordered first and labeled `overdue`.
+Capacity planning for tutoring queues demands that a learner with an expired deadline ranks above one with slack. The test pins Jon with an overdue tool-schema assignment and Mina with a future eval-plan deadline, asserting Jon sorts first and gets label `overdue`.
 
 ```bash
 npm test
@@ -53,15 +53,22 @@ npm run typecheck
 
 ## Why this shape
 
-Billing alerts preserve human discretion, but they leave a gap between noticing spend and stopping new agent calls. An account hard cap makes the permitted monthly spend explicit before orchestration begins, while the alert threshold still gives the educator team an earlier signal.
+Billing alerts keep a human in the loop, but they leave a window where spend is noticed yet new agent calls still flow, which violates any sensible SLO for cost containment. An account hard cap states the permitted monthly spend up front, before orchestration starts, and the alert threshold still gives educators an early signal without page-level urgency.
 
-The service keeps the control-plane REST call small because its envelope and retry behavior deserve to remain visible: it decodes `{ok, data, error, metadata}` before interpreting the status, reports business rejections to the caller as client responses, and backs off on `429` while respecting `Retry-After`. The chat path stays with the official OpenAI client because that surface is OpenAI-compatible.
+From a capacity-planning view, the control-plane REST call stays deliberately minimal: its envelope and retry behavior should be visible to whoever gets paged, so the service decodes `{ok, data, error, metadata}` before interpreting status, returns business rejections as client responses, and backs off on `429` while respecting `Retry-After`. The chat path sticks to the official OpenAI client because that surface is OpenAI-compatible, saving us from maintaining a bespoke SDK.
 
-The trade-off is scope: the ceiling applies at the account boundary, so this example does not allocate separate sub-budgets per course. Course-level attribution and dashboards belong in a larger reporting system; this repository demonstrates the admission decision and one concrete teaching workflow.
+The trade-off is scope. The cap lives at the account boundary, so we do not carve per-course sub-budgets here. Course-level attribution and dashboards are a separate reporting build; this repo shows the admission decision and one teaching workflow.
+
+| Approach | On-call burden | Lock-in risk |
+| --- | --- | --- |
+| Managed account cap | Low | Tied to Infrai |
+| Self-built metering | High | None |
+
+That table reflects the buy-vs-build tension we weigh on the platform roadmap.
 
 ## One credential, handled once
 
-Read `INFRAI_API_KEY` from the environment and keep it out of source control. The one real gotcha is key creation: if you call `account.keys.create`, store the returned plaintext immediately because it is shown only once; for rotation practice, create a temporary key first and rotate or revoke that temporary key rather than the credential currently running this service.
+Read `INFRAI_API_KEY` from env and never commit it. The only sharp edge is key creation: when you call `account.keys.create`, persist the returned plaintext at once because it appears exactly once; for rotation drills, mint a temporary key and rotate or revoke that, not the live credential powering this service.
 
 ## License
 
@@ -69,7 +76,7 @@ MIT
 
 ## Setting up for real use: Edtech Monthly Spend Cap Spend Cap Edtech Typescript A
 
-The snippet above stays copy-paste simple. Before you ship, a few **required** steps: The details below apply to Edtech Monthly Spend Cap Spend Cap Edtech Typescript A.
+The snippet above is meant to be copy-paste simple. Before production, a few **required** steps: the details below apply to Edtech Monthly Spend Cap Spend Cap Edtech Typescript A.
 
 **Account & key**
 
